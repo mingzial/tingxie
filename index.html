@@ -1,0 +1,2295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>📚 听写助手</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+<style>
+  :root {
+    --primary: #4f46e5;
+    --primary-light: #818cf8;
+    --primary-dark: #3730a3;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ===== LOGIN PAGE ===== */
+  .login-page {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 60%, var(--primary-light) 100%);
+    padding: 24px;
+  }
+  .login-card {
+    background: white; border-radius: 20px; padding: 40px 36px;
+    width: 100%; max-width: 420px;
+    box-shadow: 0 24px 64px rgba(55,48,163,.35);
+    animation: slideUp .4s ease;
+  }
+  .login-logo { text-align: center; margin-bottom: 28px; }
+  .login-logo .emoji { font-size: 3.2rem; display: block; margin-bottom: 6px; }
+  .login-logo h1 { font-size: 1.6rem; font-weight: 800; color: var(--primary-dark); letter-spacing: .5px; }
+  .login-logo p { font-size: .85rem; color: var(--text-muted); margin-top: 4px; }
+  .login-tabs {
+    display: flex; border: 2px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 24px; overflow: hidden;
+  }
+  .login-tab {
+    flex: 1; padding: 10px; text-align: center; font-size: .875rem; font-weight: 600;
+    cursor: pointer; color: var(--text-muted); transition: all .2s; background: transparent; border: none;
+  }
+  .login-tab.active { background: var(--primary); color: white; }
+  .login-form-group { margin-bottom: 16px; }
+  .login-form-group label {
+    display: block; font-size: .78rem; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;
+  }
+  .login-form-group input {
+    width: 100%; padding: 11px 14px; border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm); font-size: .9rem; outline: none;
+    transition: border-color .2s, box-shadow .2s; background: var(--bg); color: var(--text);
+  }
+  .login-form-group input:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); background: white;
+  }
+  .login-hint {
+    font-size: .78rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5;
+  }
+  .login-hint a { color: var(--primary); text-decoration: none; }
+  .login-hint a:hover { text-decoration: underline; }
+  .btn-login {
+    width: 100%; padding: 13px; background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white; border: none; border-radius: var(--radius-sm); font-size: 1rem;
+    font-weight: 700; cursor: pointer; margin-top: 8px;
+    transition: all .2s; box-shadow: 0 4px 15px rgba(79,70,229,.4);
+  }
+  .btn-login:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(79,70,229,.5); }
+  .btn-login:active { transform: scale(.98); }
+  .btn-login:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+  .login-divider {
+    text-align: center; color: var(--text-muted); font-size: .78rem; margin: 16px 0;
+    position: relative;
+  }
+  .login-divider::before, .login-divider::after {
+    content: ''; position: absolute; top: 50%; width: calc(50% - 30px); height: 1px; background: var(--border);
+  }
+  .login-divider::before { left: 0; }
+  .login-divider::after { right: 0; }
+  .gitee-link {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    font-size: .82rem; color: var(--text-muted); cursor: pointer; transition: all .2s;
+    text-decoration: none;
+  }
+  .gitee-link:hover { border-color: var(--primary); color: var(--primary); background: rgba(79,70,229,.04); }
+
+  /* ===== LAYOUT ===== */
+  #mainApp { display: none; }
+  .app-header {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+    color: white;
+    padding: 16px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: var(--shadow-md);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .app-header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: .5px; }
+  .app-header .subtitle { font-size: .75rem; opacity: .8; margin-top: 2px; }
+  .user-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,.15); border-radius: 999px;
+    padding: 6px 12px 6px 8px; cursor: pointer; transition: background .2s;
+    font-size: .82rem; font-weight: 600;
+  }
+  .user-badge:hover { background: rgba(255,255,255,.25); }
+  .user-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; font-weight: 700;
+  }
+
+  .nav-tabs {
+    display: flex; background: var(--card); border-bottom: 2px solid var(--border);
+    position: sticky; top: 64px; z-index: 99;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab {
+    flex: 1; min-width: 70px; padding: 12px 8px; text-align: center;
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    color: var(--text-muted); border-bottom: 3px solid transparent;
+    transition: all .2s; white-space: nowrap;
+  }
+  .nav-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .nav-tab:hover:not(.active) { background: var(--bg); color: var(--text); }
+
+  .page { display: none; padding: 16px; max-width: 900px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--card); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 16px; margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 1rem; font-weight: 700; margin-bottom: 12px;
+    color: var(--primary-dark); display: flex; align-items: center; gap: 6px;
+  }
+
+  /* ===== FORM ===== */
+  .form-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .form-group:last-child { margin-bottom: 0; }
+  .form-group label { font-size: .75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+  .form-group input, .form-group select, .form-group textarea {
+    border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    padding: 9px 12px; font-size: .9rem; outline: none;
+    transition: border-color .2s, box-shadow .2s; background: var(--bg);
+    color: var(--text);
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+    background: white;
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px; border-radius: var(--radius-sm); font-size: .875rem;
+    font-weight: 600; cursor: pointer; border: none; transition: all .2s;
+    text-decoration: none; user-select: none;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); box-shadow: 0 4px 12px rgba(79,70,229,.4); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #059669; box-shadow: 0 4px 12px rgba(16,185,129,.4); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-warning { background: var(--warning); color: white; }
+  .btn-outline {
+    background: transparent; border: 1.5px solid var(--border); color: var(--text);
+  }
+  .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: rgba(79,70,229,.05); }
+  .btn-sm { padding: 6px 12px; font-size: .8rem; }
+  .btn-lg { padding: 14px 28px; font-size: 1rem; }
+  .btn-full { width: 100%; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* ===== BADGES / TAGS ===== */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .7rem;
+    font-weight: 700; letter-spacing: .3px;
+  }
+  .badge-primary { background: rgba(79,70,229,.1); color: var(--primary); }
+  .badge-success { background: rgba(16,185,129,.1); color: var(--success); }
+  .badge-danger { background: rgba(239,68,68,.1); color: var(--danger); }
+  .badge-warning { background: rgba(245,158,11,.1); color: var(--warning); }
+
+  /* ===== CHECKBOX MULTI-SELECT ===== */
+  .check-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .check-item input[type=checkbox] { display: none; }
+  .check-item label {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 12px; border-radius: 999px;
+    border: 1.5px solid var(--border); font-size: .82rem; font-weight: 500;
+    cursor: pointer; transition: all .2s; user-select: none;
+    background: var(--bg);
+  }
+  .check-item input:checked + label {
+    background: var(--primary); color: white; border-color: var(--primary);
+  }
+  .check-item label:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* ===== TABLE ===== */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th { background: var(--bg); font-weight: 700; color: var(--text-muted); font-size: .75rem;
+    text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; text-align: left; }
+  td { padding: 9px 12px; border-top: 1px solid var(--border); }
+  tr:hover td { background: rgba(79,70,229,.03); }
+  .no-data { text-align: center; padding: 32px; color: var(--text-muted); font-size: .9rem; }
+
+  /* ===== DICTATION PAGE ===== */
+  .range-section .section-label {
+    font-size: .75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: .5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+  }
+  .range-section .section-label::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ===== BROADCAST ===== */
+  #broadcastPage { text-align: center; }
+  .word-display {
+    font-size: clamp(2.5rem, 8vw, 5rem); font-weight: 900; color: var(--primary-dark);
+    letter-spacing: 8px; padding: 32px 16px;
+    min-height: 160px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #ede9fe, #e0e7ff);
+    border-radius: var(--radius); margin: 16px 0;
+    border: 2px solid #c7d2fe; text-shadow: 0 2px 4px rgba(79,70,229,.2);
+    word-break: break-all;
+  }
+  .word-display.playing { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+  .progress-bar-wrap {
+    background: var(--border); border-radius: 999px; height: 8px; margin: 8px 0;
+    overflow: hidden;
+  }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light)); border-radius: 999px; transition: width .4s; }
+  .progress-text { font-size: .85rem; color: var(--text-muted); margin: 6px 0 16px; }
+
+  .ctrl-btns {
+    display: flex; flex-direction: column; gap: 10px; margin-top: 16px;
+  }
+  .ctrl-btns-aux { display: flex; gap: 8px; }
+  .ctrl-btns-aux .btn { flex: 1; font-size: .85rem; padding: 10px 4px; }
+  .ctrl-btns-main { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctrl-btn-prev, .ctrl-btn-next {
+    padding: 16px 8px; font-size: 1rem;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white; border: none; border-radius: var(--radius); cursor: pointer;
+    font-weight: 700; box-shadow: 0 4px 15px rgba(79,70,229,.4);
+    transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .ctrl-btn-prev:hover, .ctrl-btn-next:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,.5); }
+  .ctrl-btn-prev:active, .ctrl-btn-next:active { transform: scale(.97); }
+  .voice-hint {
+    font-size: .8rem; color: var(--text-muted); margin-top: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .mic-indicator {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted);
+    display: inline-block; transition: background .3s;
+  }
+  .mic-indicator.listening { background: var(--success); animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ===== CHECK PAGE ===== */
+  .word-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .word-chip {
+    padding: 8px 18px; border-radius: 999px; font-size: 1rem; font-weight: 600;
+    border: 2px solid var(--border); cursor: pointer; transition: all .2s;
+    background: white; user-select: none; position: relative;
+  }
+  .word-chip:hover { border-color: var(--warning); color: var(--warning); }
+  .word-chip.correct { background: rgba(16,185,129,.1); border-color: var(--success); color: var(--success); }
+  .word-chip.wrong { background: rgba(239,68,68,.1); border-color: var(--danger); color: var(--danger); }
+  .word-chip .chip-idx {
+    position: absolute; top: -8px; left: -4px;
+    font-size: .6rem; background: var(--text-muted); color: white;
+    border-radius: 999px; padding: 1px 5px; font-weight: 700;
+  }
+  .word-chip.wrong .chip-idx { background: var(--danger); }
+  .word-chip.correct .chip-idx { background: var(--success); }
+
+  /* ===== ERROR TABLE PAGE ===== */
+  .error-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%; font-size: .7rem; font-weight: 700;
+    background: var(--danger); color: white;
+  }
+
+  /* ===== ALERTS / TOASTS ===== */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+    background: rgba(30,41,59,.95); color: white; padding: 12px 24px;
+    border-radius: 999px; font-size: .875rem; font-weight: 600;
+    transition: transform .3s ease; z-index: 9999; max-width: 90vw; text-align: center;
+    backdrop-filter: blur(8px);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { background: rgba(16,185,129,.95); }
+  #toast.error { background: rgba(239,68,68,.95); }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    z-index: 1000; align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--card); border-radius: var(--radius); padding: 24px;
+    max-width: 480px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    animation: slideUp .3s ease;
+  }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ===== BACKUP LIST MODAL ===== */
+  .backup-list { max-height: 320px; overflow-y: auto; margin: 12px 0; }
+  .backup-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 8px; cursor: pointer; transition: all .2s;
+  }
+  .backup-item:hover { border-color: var(--primary); background: rgba(79,70,229,.04); }
+  .backup-item.selected { border-color: var(--primary); background: rgba(79,70,229,.08); }
+  .backup-item-name { font-size: .875rem; font-weight: 600; }
+  .backup-item-meta { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+  .backup-item-actions { display: flex; gap: 6px; }
+
+  /* ===== LOADING ===== */
+  .loading-screen {
+    position: fixed; inset: 0; background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 9999; color: white; gap: 16px;
+  }
+  .loading-screen.hidden { display: none; }
+  .spinner {
+    width: 48px; height: 48px; border: 4px solid rgba(255,255,255,.3);
+    border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { font-size: 1rem; opacity: .9; }
+
+  /* ===== STATS BAR ===== */
+  .stats-bar {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;
+  }
+  .stat-item {
+    background: var(--card); border-radius: var(--radius-sm); padding: 12px;
+    text-align: center; border: 1px solid var(--border);
+  }
+  .stat-num { font-size: 1.5rem; font-weight: 800; color: var(--primary); }
+  .stat-label { font-size: .7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+
+  /* ===== SELECT ALL ===== */
+  .select-all-link {
+    font-size: .75rem; color: var(--primary); cursor: pointer; text-decoration: underline; margin-left: 8px;
+  }
+
+  /* ===== SYNC STATUS ===== */
+  .sync-indicator {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: .75rem; padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,.15); color: rgba(255,255,255,.9);
+  }
+  .sync-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #fbbf24;
+  }
+  .sync-dot.synced { background: #34d399; }
+  .sync-dot.syncing { background: #fbbf24; animation: blink 1s infinite; }
+  .sync-dot.error { background: #f87171; }
+
+  /* ===== IMPORT AREA ===== */
+  .import-area {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 32px 16px; text-align: center; transition: all .2s; cursor: pointer;
+    margin-bottom: 12px;
+  }
+  .import-area:hover, .import-area.drag-over { border-color: var(--primary); background: rgba(79,70,229,.03); }
+  .import-area .import-icon { font-size: 2.5rem; margin-bottom: 8px; }
+  .import-area p { font-size: .875rem; color: var(--text-muted); }
+
+  /* Tab icons */
+  .tab-icon { font-size: 1.1rem; display: block; margin-bottom: 2px; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 480px) {
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .stats-bar { grid-template-columns: repeat(3, 1fr); }
+    .btn-lg { padding: 12px 20px; font-size: .95rem; }
+    .word-chip { font-size: .9rem; padding: 7px 14px; }
+    .login-card { padding: 28px 20px; }
+  }
+  @media (min-width: 768px) {
+    .page { padding: 24px; }
+  }
+  @media (min-width: 1024px) {
+    .app-header { padding: 18px 32px; }
+    .app-header h1 { font-size: 1.4rem; }
+    .nav-tab { font-size: .9rem; padding: 14px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div class="loading-screen" id="loadingScreen">
+  <div style="font-size:3rem">📚</div>
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">正在初始化…</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ============================================================ -->
+<!-- LOGIN PAGE -->
+<!-- ============================================================ -->
+<div id="loginPage" style="display:none">
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="emoji">📚</span>
+        <h1>听写助手</h1>
+        <p>淼淼语文听写训练助手</p>
+      </div>
+      <div class="login-tabs">
+        <button class="login-tab active" id="tabLogin" onclick="switchLoginTab('login')">登录</button>
+        <button class="login-tab" id="tabRegister" onclick="switchLoginTab('register')">注册</button>
+      </div>
+
+      <!-- 登录表单 -->
+      <div id="loginForm">
+        <div class="login-form-group">
+          <label>用户名</label>
+          <input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username">
+        </div>
+        <div class="login-form-group">
+          <label>密码</label>
+          <input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password">
+        </div>
+        <button class="btn-login" id="loginBtn" onclick="doLogin()">登录</button>
+      </div>
+
+      <!-- 注册表单 -->
+      <div id="registerForm" style="display:none">
+        <div class="login-form-group">
+          <label>用户名（中文或英文）</label>
+          <input type="text" id="regUsername" placeholder="如：淼淼 或 miaomiao">
+        </div>
+        <div class="login-form-group">
+          <label>密码</label>
+          <input type="password" id="regPassword" placeholder="至少6位">
+        </div>
+        <div class="login-form-group">
+          <label>确认密码</label>
+          <input type="password" id="regPassword2" placeholder="再次输入密码">
+        </div>
+        <div class="login-form-group">
+          <label>GitHub Personal Access Token</label>
+          <input type="password" id="regToken" placeholder="在 GitHub 个人设置中生成">
+          <div class="login-hint">
+            需要 <strong>repo</strong>（私有仓库读写）权限。
+            <a href="https://github.com/settings/tokens/new" target="_blank">前往 GitHub 生成 →</a>
+          </div>
+        </div>
+        <div class="login-form-group">
+          <label>GitHub 用户名（仓库所有者）</label>
+          <input type="text" id="regGhOwner" placeholder="你的 GitHub 账号用户名">
+        </div>
+        <div class="login-form-group">
+          <label>仓库名</label>
+          <input type="text" id="regGhRepo" placeholder="如：tingxie-data" value="tingxie-data">
+          <div class="login-hint">仓库须为<strong>私有仓库</strong>，提前在 GitHub 创建好。</div>
+        </div>
+        <button class="btn-login" id="registerBtn" onclick="doRegister()">注册并初始化</button>
+      </div>
+
+      <div class="login-divider">数据存储在 GitHub 私有仓库</div>
+      <a class="gitee-link" href="https://github.com" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        GitHub — 数据仓库托管
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <div class="modal-title" id="confirmTitle">确认操作</div>
+    <div id="confirmBody" style="font-size:.9rem;color:var(--text-muted);line-height:1.6"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('confirmModal')">取消</button>
+      <button class="btn btn-danger" id="confirmOkBtn">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup List Modal -->
+<div class="modal-overlay" id="backupListModal">
+  <div class="modal-box" style="max-width:540px">
+    <div class="modal-title">📂 选择备份文件导入</div>
+    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+      点击选择要导入的备份，数据将合并到当前词库（不会删除已有数据）
+    </div>
+    <div class="backup-list" id="backupListContent">
+      <div class="no-data">加载中…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('backupListModal')">取消</button>
+      <button class="btn btn-primary" id="backupImportConfirmBtn" onclick="importSelectedBackup()" disabled>导入选中备份</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MAIN APP -->
+<!-- ============================================================ -->
+<div id="mainApp">
+
+<!-- App Header -->
+<header class="app-header">
+  <div>
+    <h1>📚 听写助手</h1>
+    <div class="subtitle">淼淼语文听写训练助手</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="sync-indicator" id="syncIndicator" title="同步状态">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="syncText">—</span>
+    </div>
+    <div class="user-badge" onclick="showUserMenu()" id="userBadge">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <span id="userDisplayName">未登录</span>
+    </div>
+  </div>
+</header>
+
+<!-- User Menu Modal -->
+<div class="modal-overlay" id="userMenuModal">
+  <div class="modal-box" style="max-width:320px">
+    <div class="modal-title">👤 用户信息</div>
+    <div style="font-size:.9rem;line-height:1.8;color:var(--text-muted);margin-bottom:12px">
+      <div>用户名：<strong id="menuUsername">—</strong></div>
+      <div>GitHub 仓库：<span id="menuRepo">—</span></div>
+      <div>本地缓存：<span id="menuCache">—</span></div>
+    </div>
+    <div class="btn-group" style="flex-direction:column;margin-top:0">
+      <button class="btn btn-primary btn-full" onclick="syncToGitee(true)">☁️ 立即同步到 GitHub</button>
+      <button class="btn btn-outline btn-full" onclick="loadFromGitee(true)">⬇️ 从 GitHub 重新加载</button>
+      <button class="btn btn-danger btn-full" onclick="doLogout()">🚪 退出登录</button>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('userMenuModal')">关闭</button></div>
+  </div>
+</div>
+
+<!-- Nav Tabs -->
+<nav class="nav-tabs">
+  <div class="nav-tab active" data-page="dictationPage" onclick="switchPage('dictationPage')">
+    <span class="tab-icon">🎧</span>听写
+  </div>
+  <div class="nav-tab" data-page="checkPage" onclick="switchPage('checkPage')">
+    <span class="tab-icon">✅</span>检查
+  </div>
+  <div class="nav-tab" data-page="statsPage" onclick="switchPage('statsPage')">
+    <span class="tab-icon">📊</span>统计
+  </div>
+  <div class="nav-tab" data-page="errorPage" onclick="switchPage('errorPage')">
+    <span class="tab-icon">❌</span>错误表
+  </div>
+  <div class="nav-tab" data-page="inputPage" onclick="switchPage('inputPage')">
+    <span class="tab-icon">✏️</span>录入
+  </div>
+  <div class="nav-tab" data-page="managePage" onclick="switchPage('managePage')">
+    <span class="tab-icon">📋</span>词库
+  </div>
+</nav>
+
+
+
+<!-- ============================================================ -->
+<!-- PAGE 1: 听写 -->
+<!-- ============================================================ -->
+<div class="page active" id="dictationPage">
+
+  <!-- 范围选择 -->
+  <div class="card" id="rangeCard">
+    <div class="card-title">🎯 听写范围选择</div>
+
+    <div class="range-section" style="margin-bottom:12px">
+      <div class="section-label">年级 <span class="select-all-link" onclick="selectAll('gradeChecks')">全选</span></div>
+      <div class="check-group" id="gradeChecks"></div>
+    </div>
+    <div class="range-section" style="margin-bottom:12px">
+      <div class="section-label">单元 <span class="select-all-link" onclick="selectAll('unitChecks')">全选</span></div>
+      <div class="check-group" id="unitChecks"></div>
+    </div>
+    <div class="range-section" style="margin-bottom:12px">
+      <div class="section-label">课文 <span class="select-all-link" onclick="selectAll('lessonChecks')">全选</span></div>
+      <div class="check-group" id="lessonChecks"></div>
+    </div>
+    <div class="range-section" style="margin-bottom:12px">
+      <div class="section-label">类型 <span class="select-all-link" onclick="selectAll('typeChecks')">全选</span></div>
+      <div class="check-group" id="typeChecks"></div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <div class="form-group" style="flex:1;min-width:140px">
+        <label>抽取数量</label>
+        <input type="number" id="pickCount" placeholder="0=全部抽取" min="0" value="0" style="background:white">
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:4px">符合条件词语数</div>
+        <div style="font-size:1.4rem;font-weight:800;color:var(--primary)" id="matchCount">—</div>
+      </div>
+    </div>
+
+    <div id="errorWordHint" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(239,68,68,.07);border-radius:var(--radius-sm);border:1px solid rgba(239,68,68,.2);font-size:.85rem;color:var(--danger)">
+      ⚠️ 错误表中有 <strong id="errorWordCount">0</strong> 个词语将额外加入本次听写
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" style="margin-top:16px" onclick="startDictation()">
+      🎧 开始听写
+    </button>
+  </div>
+
+  <!-- 播报界面 -->
+  <div class="card" id="broadcastCard" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="card-title" style="margin:0">🔊 正在播报</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="timerDisplay" style="font-size:1.1rem;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums;letter-spacing:1px;min-width:60px;text-align:right">00:00</div>
+        <button class="btn btn-outline btn-sm" onclick="stopDictation()">⏹ 结束</button>
+      </div>
+    </div>
+
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="progress-text" id="progressText">0 / 0</div>
+
+    <div class="word-display" id="wordDisplay" style="display:none">—</div>
+    <div id="broadcastIndicator" style="
+      min-height:140px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+      background:linear-gradient(135deg,#ede9fe,#e0e7ff); border-radius:var(--radius);
+      margin:16px 0; border:2px solid #c7d2fe;
+    ">
+      <div id="speakingIcon" style="font-size:3rem;line-height:1">🔊</div>
+      <div id="broadcastStatus" style="font-size:1rem;font-weight:700;color:var(--primary-dark);letter-spacing:1px">准备中…</div>
+      <div style="font-size:.8rem;color:var(--text-muted)">听到词语后请在纸上默写</div>
+    </div>
+
+    <div class="ctrl-btns">
+      <div class="ctrl-btns-aux">
+        <button class="btn btn-outline" onclick="repeatWord()">🔁 重复</button>
+        <button class="btn btn-outline" id="slowBtn" onclick="speakSlow()">🐢 慢读</button>
+      </div>
+      <div class="ctrl-btns-main">
+        <button class="ctrl-btn-prev" id="prevBtn" onclick="prevWord()">◀ 上一个词语</button>
+        <button class="ctrl-btn-next" id="nextBtn" onclick="nextWord()">▶ 下一个词语</button>
+      </div>
+    </div>
+
+    <div class="voice-hint">
+      <span class="mic-indicator" id="micIndicator"></span>
+      <span id="voiceStatus">语音识别未启动</span>
+    </div>
+
+    <div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:.8rem;color:var(--text-muted)">
+      💡 说"<strong>下一个</strong>"或"<strong>继续</strong>"下一词，说"<strong>重复</strong>"重听 &nbsp;|&nbsp; 键盘：<strong>空格/回车</strong>=下一个，<strong>R</strong>=重复，<strong>P</strong>=上一个
+    </div>
+  </div>
+
+  <!-- 播报完成 -->
+  <div class="card" id="finishCard" style="display:none">
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:3rem;margin-bottom:8px">🎉</div>
+      <div style="font-size:1.2rem;font-weight:700;color:var(--success);margin-bottom:4px">播报完成！</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:280px;margin:12px auto 20px">
+        <div style="background:rgba(79,70,229,.07);border-radius:var(--radius-sm);padding:10px;border:1px solid rgba(79,70,229,.15)">
+          <div style="font-size:1.5rem;font-weight:800;color:var(--primary)" id="totalBroadcast">0</div>
+          <div style="font-size:.72rem;color:var(--text-muted);font-weight:600">播报词语</div>
+        </div>
+        <div style="background:rgba(16,185,129,.07);border-radius:var(--radius-sm);padding:10px;border:1px solid rgba(16,185,129,.15)">
+          <div style="font-size:1.5rem;font-weight:800;color:var(--success)" id="finishTimerDisplay">00:00</div>
+          <div style="font-size:.72rem;color:var(--text-muted);font-weight:600">本次用时</div>
+        </div>
+      </div>
+      <div style="font-size:.875rem;color:var(--text-muted);margin-bottom:20px">请前往检查页面核对听写结果</div>
+      <div class="btn-group" style="justify-content:center">
+        <button class="btn btn-success btn-lg" onclick="goToCheck()">✅ 前往检查</button>
+        <button class="btn btn-outline" onclick="resetDictation()">🔄 重新选择</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 2: 检查 -->
+<!-- ============================================================ -->
+<div class="page" id="checkPage">
+  <div id="checkNoData" class="card" style="text-align:center;padding:40px">
+    <div style="font-size:3rem;margin-bottom:12px">📝</div>
+    <div style="font-size:1rem;font-weight:600;color:var(--text-muted)">暂无听写记录</div>
+    <div style="font-size:.85rem;color:var(--text-muted);margin:8px 0 20px">请先完成一次听写播报</div>
+    <button class="btn btn-primary" onclick="switchPage('dictationPage')">前往听写</button>
+  </div>
+
+  <div id="checkContent" style="display:none">
+    <div class="stats-bar" id="checkStats"></div>
+
+    <div class="card">
+      <div class="card-title">📋 听写词语 — 点击标记错误</div>
+      <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
+        🟢 点击一次 = 标记<strong style="color:var(--danger)">写错</strong> &nbsp;|&nbsp; 再次点击 = 取消标记 &nbsp;|&nbsp; 按播报顺序排列
+      </div>
+      <div class="word-grid" id="checkWordGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💾 提交检查结果</div>
+      <div style="font-size:.875rem;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+        标记错误词语后点击提交，错误词语将记录到错误表，参与下次复习强化。
+      </div>
+      <div id="wrongSummary" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.07);border-radius:var(--radius-sm);border:1px solid rgba(239,68,68,.2)">
+        <div style="font-size:.875rem;font-weight:700;color:var(--danger);margin-bottom:6px">已标记写错：</div>
+        <div id="wrongWordsList" style="font-size:.875rem;color:var(--text);line-height:1.8"></div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-success btn-lg" onclick="submitCheck()">✅ 提交检查结果</button>
+        <button class="btn btn-outline" onclick="resetCheck()">🔄 重置标记</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 2.5: 统计 -->
+<!-- ============================================================ -->
+<div class="page" id="statsPage">
+  <div class="stats-bar" id="statsOverview" style="grid-template-columns:repeat(4,1fr)">
+    <div class="stat-item"><div class="stat-num" id="stTotal">0</div><div class="stat-label">总场次</div></div>
+    <div class="stat-item"><div class="stat-num" id="stWords">0</div><div class="stat-label">累计词语</div></div>
+    <div class="stat-item"><div class="stat-num" id="stAvgAcc">—</div><div class="stat-label">平均正确率</div></div>
+    <div class="stat-item"><div class="stat-num" id="stAvgTime">—</div><div class="stat-label">平均用时</div></div>
+  </div>
+
+  <div class="card" id="trendCard" style="display:none">
+    <div class="card-title">📈 最近10次正确率趋势</div>
+    <canvas id="trendCanvas" height="80" style="width:100%;display:block"></canvas>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📋 最近10次听写记录</div>
+      <button class="btn btn-outline btn-sm" onclick="loadStatsPage()">🔄 刷新</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>开始时间</th><th>用时</th><th>词语数</th><th>正确</th><th>错误</th><th>正确率</th><th>范围</th>
+          </tr>
+        </thead>
+        <tbody id="sessionsTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 3: 错误表 -->
+<!-- ============================================================ -->
+<div class="page" id="errorPage">
+  <div class="stats-bar" id="errorStats">
+    <div class="stat-item"><div class="stat-num" id="eStat1">0</div><div class="stat-label">错误词语</div></div>
+    <div class="stat-item"><div class="stat-num" id="eStat2">0</div><div class="stat-label">累计错误</div></div>
+    <div class="stat-item"><div class="stat-num" id="eStat3">0</div><div class="stat-label">累计正确</div></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div class="card-title" style="margin:0">❌ 错误词语记录</div>
+      <button class="btn btn-outline btn-sm" onclick="loadErrorTable()">🔄 刷新</button>
+    </div>
+    <div class="table-wrap">
+      <table id="errorTable">
+        <thead>
+          <tr>
+            <th>词语</th><th>年级</th><th>单元</th><th>课文</th><th>类型</th>
+            <th>错误</th><th>正确</th><th>首次错误</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="errorTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 4: 录入 -->
+<!-- ============================================================ -->
+<div class="page" id="inputPage">
+  <div class="card">
+    <div class="card-title">✏️ 词语录入</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>年级 <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="inGrade" placeholder="如：一年级上" list="gradeList">
+        <datalist id="gradeList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>单元 <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="inUnit" placeholder="如：第一单元" list="unitList">
+        <datalist id="unitList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>课文 <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="inLesson" placeholder="如：第1课" list="lessonList">
+        <datalist id="lessonList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>类型 <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="inType" placeholder="如：词语表/组词" list="typeList">
+        <datalist id="typeList"></datalist>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>词语（每行一个，或用逗号/空格分隔）</label>
+      <textarea id="inWords" placeholder="例：&#10;春天&#10;夏天&#10;秋天&#10;或：春天,夏天,秋天" rows="5"></textarea>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary btn-lg" onclick="addWords()">➕ 添加词语</button>
+      <button class="btn btn-outline" onclick="clearInputForm()">🗑 清空</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📥 批量导入（TXT/CSV）</div>
+    <div class="import-area" id="importArea" onclick="document.getElementById('importFile').click()">
+      <div class="import-icon">📄</div>
+      <p>点击选择文件，或拖拽文件到此处</p>
+      <p style="margin-top:4px;font-size:.75rem">支持 .txt、.csv 文件</p>
+      <p style="margin-top:6px;font-size:.75rem">格式：年级,单元,课文,类型,词语（每行一条）</p>
+    </div>
+    <input type="file" id="importFile" accept=".txt,.csv" style="display:none" onchange="importFile(event)">
+    <div id="importPreview" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAGE 5: 词库管理 -->
+<!-- ============================================================ -->
+<div class="page" id="managePage">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+    <input type="text" id="searchInput" placeholder="🔍 搜索词语、年级、单元…" style="flex:1;min-width:160px;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:.875rem;outline:none;transition:border-color .2s" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'" oninput="searchWords()">
+    <button class="btn btn-outline btn-sm" onclick="exportData()">📤 导出数据</button>
+    <button class="btn btn-danger btn-sm" onclick="clearAllData()">🗑 清空全部</button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title" style="margin:0">📋 词语库</div>
+      <span class="badge badge-primary" id="totalWordsBadge">0 词</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>年级</th><th>单元</th><th>课文</th><th>类型</th><th>词语</th><th>操作</th></tr>
+        </thead>
+        <tbody id="manageTableBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap" id="pagination"></div>
+  </div>
+
+  <!-- 数据存储说明 -->
+  <div class="card" style="border-color:#c7d2fe;background:linear-gradient(135deg,#f5f3ff,#eef2ff)">
+    <div class="card-title" style="color:#4338ca">💾 数据存储说明</div>
+    <div style="font-size:.85rem;line-height:1.9;color:var(--text)">
+      <p>数据主存于 <strong>GitHub 私有仓库</strong>，每次提交检查后自动同步。本地 localStorage 作缓存，断网可用。</p>
+      <div style="margin:10px 0;padding:10px 14px;background:white;border-radius:var(--radius-sm);border:1px solid #c7d2fe;font-size:.82rem">
+        <span style="color:#7c3aed;font-weight:700">数据路径：</span><span id="storePathDisplay">—</span><br>
+        <span style="color:#7c3aed;font-weight:700">备份路径：</span><span id="backupPathDisplay">—</span><br>
+        <span style="color:#7c3aed;font-weight:700">备份策略：</span>每次听写检查后自动保存，每用户保留最新 30 个
+      </div>
+      <p style="color:var(--success)"><strong>✅ GitHub API：</strong>认证后每小时 5000 次请求，日常使用无需担心频率限制。</p>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="exportBackup()">📤 导出备份</button>
+        <button class="btn btn-outline btn-sm" onclick="showBackupList()">📂 从备份导入</button>
+        <button class="btn btn-outline btn-sm" onclick="showStorageInfo()">📊 存储用量</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end #mainApp -->
+
+
+
+<!-- ============================================================ -->
+<script>
+// =====================================================
+// GITHUB CONFIG & STATE
+// =====================================================
+const APP_KEY      = 'tingxie_db_v2';
+const USERS_KEY    = 'tingxie_users';      // localStorage: {username:{hash,ghToken,ghOwner,ghRepo}}
+const CUR_USER_KEY = 'tingxie_cur_user';   // 当前登录用户名
+
+let currentUser = null;  // { username, ghToken, ghOwner, ghRepo }
+let db = null;
+let SQL = null;
+
+// =====================================================
+// GITHUB API LAYER
+// =====================================================
+const GH_API = 'https://api.github.com';
+
+function ghHeaders(token) {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `token ${token}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+
+// UTF-8 安全的 Base64 编码/解码
+function b64Encode(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64Decode(b64) {
+  return decodeURIComponent(escape(atob(b64.replace(/\n/g,''))));
+}
+
+// 读取文件（返回 { content:string, sha:string } 或 null）
+async function ghGetFile(owner, repo, path, token) {
+  try {
+    const res = await fetch(`${GH_API}/repos/${owner}/${repo}/contents/${path}`, {
+      headers: ghHeaders(token)
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return { content: b64Decode(json.content), sha: json.sha };
+  } catch(e) { console.error('ghGetFile', e); return null; }
+}
+
+// 创建或更新文件（GitHub 统一使用 PUT，sha 存在则更新，不存在则创建）
+async function ghPutFile(owner, repo, path, content, message, sha, token) {
+  const body = { message, content: b64Encode(content) };
+  if (sha) body.sha = sha;
+  const res = await fetch(`${GH_API}/repos/${owner}/${repo}/contents/${path}`, {
+    method: 'PUT',
+    headers: ghHeaders(token),
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`github put ${res.status}: ${text}`);
+  }
+  return await res.json();
+}
+
+// 列出目录（返回 [{name, sha, path, type}]）
+async function ghListDir(owner, repo, path, token) {
+  try {
+    const res = await fetch(`${GH_API}/repos/${owner}/${repo}/contents/${path}`, {
+      headers: ghHeaders(token)
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) return [];
+    const list = await res.json();
+    return Array.isArray(list) ? list : [];
+  } catch(e) { return []; }
+}
+
+// 删除文件
+async function ghDeleteFile(owner, repo, path, sha, message, token) {
+  const body = { message, sha };
+  const res = await fetch(`${GH_API}/repos/${owner}/${repo}/contents/${path}`, {
+    method: 'DELETE',
+    headers: ghHeaders(token),
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`github delete ${res.status}`);
+}
+
+// 兼容别名（内部调用保持一致）
+const giteeGetFile    = ghGetFile;
+const giteePutFile    = ghPutFile;
+const giteeListDir    = ghListDir;
+const giteeDeleteFile = ghDeleteFile;
+
+// =====================================================
+// AUTH — 用户注册 / 登录 / 登出
+// =====================================================
+async function hashPass(pass) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function loadUsers() {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); } catch(e) { return {}; }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+async function doRegister() {
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true; btn.textContent = '注册中…';
+  try {
+    const username = document.getElementById('regUsername').value.trim();
+    const pass     = document.getElementById('regPassword').value;
+    const pass2    = document.getElementById('regPassword2').value;
+    const token    = document.getElementById('regToken').value.trim();
+    const owner    = document.getElementById('regGhOwner').value.trim();
+    const repo     = document.getElementById('regGhRepo').value.trim();
+
+    if (!username) { showToast('请输入用户名', 'error'); return; }
+    if (pass.length < 6) { showToast('密码至少6位', 'error'); return; }
+    if (pass !== pass2) { showToast('两次密码不一致', 'error'); return; }
+    if (!token || !owner || !repo) { showToast('请填写 GitHub Token / 用户名 / 仓库名', 'error'); return; }
+
+    const users = loadUsers();
+    if (users[username]) { showToast('该用户名已存在', 'error'); return; }
+
+    // 验证 Token（尝试访问仓库）
+    const testRes = await fetch(`${GH_API}/repos/${owner}/${repo}`, {
+      headers: ghHeaders(token)
+    });
+    if (!testRes.ok) { showToast('❌ GitHub Token 或仓库信息有误，请检查', 'error'); return; }
+
+    const hash = await hashPass(pass);
+    users[username] = { hash, ghToken: token, ghOwner: owner, ghRepo: repo };
+    saveUsers(users);
+
+    // 初始化用户数据文件（若不存在）
+    const dataPath = `users/${username}/data.json`;
+    const exist = await giteeGetFile(owner, repo, dataPath, token);
+    if (!exist) {
+      const initData = JSON.stringify({ version: 1, words: [], errors: [], sessions: [] }, null, 2);
+      await giteePutFile(owner, repo, dataPath, initData, `init: create user ${username}`, null, token);
+    }
+
+    showToast('✅ 注册成功，正在登录…', 'success');
+    await doLoginAs(username, token, owner, repo);
+  } catch(e) {
+    showToast('❌ 注册失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '注册并初始化';
+  }
+}
+
+async function doLogin() {
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = '登录中…';
+  try {
+    const username = document.getElementById('loginUsername').value.trim();
+    const pass     = document.getElementById('loginPassword').value;
+    if (!username || !pass) { showToast('请输入用户名和密码', 'error'); return; }
+    const users = loadUsers();
+    const u = users[username];
+    if (!u) { showToast('用户不存在，请先注册', 'error'); return; }
+    const hash = await hashPass(pass);
+    if (hash !== u.hash) { showToast('密码错误', 'error'); return; }
+    await doLoginAs(username, u.ghToken, u.ghOwner, u.ghRepo);
+  } catch(e) {
+    showToast('❌ 登录失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '登录';
+  }
+}
+
+async function doLoginAs(username, token, owner, repo) {
+  currentUser = { username, ghToken: token, ghOwner: owner, ghRepo: repo };
+  localStorage.setItem(CUR_USER_KEY, username);
+  setSyncStatus('syncing', '同步中…');
+  document.getElementById('loadingText').textContent = '加载云端数据…';
+  document.getElementById('loadingScreen').classList.remove('hidden');
+  document.getElementById('loginPage').style.display = 'none';
+  await initDB();
+  await loadFromGitee(false);
+  document.getElementById('loadingScreen').classList.add('hidden');
+  showMainApp();
+}
+
+function doLogout() {
+  showConfirm('退出登录', '确定退出？本地缓存数据将保留。', () => {
+    currentUser = null;
+    localStorage.removeItem(CUR_USER_KEY);
+    closeModal('userMenuModal');
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('loginPage').style.display = '';
+    db = null; SQL = null;
+  });
+}
+
+function showMainApp() {
+  document.getElementById('mainApp').style.display = '';
+  document.getElementById('loginPage').style.display = 'none';
+  // 更新头部
+  const u = currentUser;
+  const initial = u.username.charAt(0).toUpperCase();
+  document.getElementById('userAvatar').textContent = initial;
+  document.getElementById('userDisplayName').textContent = u.username;
+  // 更新存储路径显示
+  document.getElementById('storePathDisplay').textContent = `users/${u.username}/data.json`;
+  document.getElementById('backupPathDisplay').textContent = `backups/${u.username}/backup_*.json（最多30个）`;
+  // 初始化页面
+  loadDatalistOptions();
+  refreshRangeFilters();
+  updateHeaderStats();
+  setSyncStatus('synced', '已同步');
+}
+
+function showUserMenu() {
+  const u = currentUser;
+  if (!u) return;
+  document.getElementById('menuUsername').textContent = u.username;
+  document.getElementById('menuRepo').textContent = `${u.ghOwner}/${u.ghRepo}`;
+  const raw = localStorage.getItem(APP_KEY + '_' + u.username) || '';
+  const kb = (new Blob([raw]).size / 1024).toFixed(1);
+  document.getElementById('menuCache').textContent = kb + ' KB';
+  document.getElementById('userMenuModal').classList.add('show');
+}
+
+// 登录/注册 tab 切换
+function switchLoginTab(tab) {
+  document.getElementById('loginForm').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+}
+
+// =====================================================
+// SYNC STATUS
+// =====================================================
+function setSyncStatus(state, text) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  if (!dot || !txt) return;
+  dot.className = 'sync-dot ' + state;
+  txt.textContent = text;
+}
+
+// =====================================================
+// GITHUB SYNC — 读 / 写
+// =====================================================
+function dbKey() { return APP_KEY + '_' + (currentUser?.username || 'guest'); }
+
+// 将本地 SQLite 导出为 JSON，写入 GitHub
+async function syncToGitee(manual = false) {
+  if (!currentUser) return;
+  const { ghToken: token, ghOwner: owner, ghRepo: repo, username } = currentUser;
+  setSyncStatus('syncing', '同步中…');
+  try {
+    const words    = queryAll('SELECT * FROM words ORDER BY id');
+    const errors   = queryAll('SELECT * FROM errors ORDER BY id');
+    const sessions = queryAll('SELECT * FROM sessions ORDER BY id');
+    const data = JSON.stringify({ version:1, syncTime: new Date().toISOString(), words, errors, sessions }, null, 2);
+
+    // 读取现有 sha
+    const dataPath = `users/${username}/data.json`;
+    const exist = await ghGetFile(owner, repo, dataPath, token);
+    await ghPutFile(owner, repo, dataPath, data, `sync: ${new Date().toLocaleString('zh-CN')}`, exist?.sha || null, token);
+
+    // 自动备份
+    await giteeBackup(words, errors, sessions, token, owner, repo, username);
+
+    setSyncStatus('synced', '已同步');
+    if (manual) showToast('✅ 已同步到 GitHub', 'success');
+  } catch(e) {
+    setSyncStatus('error', '同步失败');
+    if (manual) showToast('❌ 同步失败：' + e.message, 'error');
+    console.error('syncToGitee', e);
+  }
+}
+
+// 从 GitHub 加载数据覆盖本地
+async function loadFromGitee(manual = false) {
+  if (!currentUser) return;
+  const { ghToken: token, ghOwner: owner, ghRepo: repo, username } = currentUser;
+  setSyncStatus('syncing', '加载中…');
+  try {
+    const dataPath = `users/${username}/data.json`;
+    const remote = await ghGetFile(owner, repo, dataPath, token);
+    if (!remote) {
+      setSyncStatus('synced', '新用户');
+      if (manual) showToast('云端暂无数据', '');
+      return;
+    }
+    const cloudData = JSON.parse(remote.content);
+    // 清空本地，写入云端数据
+    db.run('DELETE FROM words');
+    db.run('DELETE FROM errors');
+    db.run('DELETE FROM sessions');
+    (cloudData.words   || []).forEach(r => db.run(
+      'INSERT OR IGNORE INTO words(grade,unit,lesson,type,word) VALUES(?,?,?,?,?)',
+      [r.grade,r.unit,r.lesson,r.type,r.word]
+    ));
+    (cloudData.errors  || []).forEach(r => db.run(
+      'INSERT OR IGNORE INTO errors(grade,unit,lesson,type,word,wrong_count,correct_count,first_wrong,last_wrong) VALUES(?,?,?,?,?,?,?,?,?)',
+      [r.grade,r.unit,r.lesson,r.type,r.word,r.wrong_count||1,r.correct_count||0,r.first_wrong||null,r.last_wrong||null]
+    ));
+    (cloudData.sessions || []).forEach(r => db.run(
+      'INSERT OR IGNORE INTO sessions(start_time,end_time,duration_sec,total_words,correct_words,wrong_words,accuracy,scope) VALUES(?,?,?,?,?,?,?,?)',
+      [r.start_time,r.end_time||null,r.duration_sec||0,r.total_words||0,r.correct_words||0,r.wrong_words||0,r.accuracy||0,r.scope||'']
+    ));
+    saveDB();
+    setSyncStatus('synced', '已同步');
+    if (manual) {
+      showToast('✅ 已从 GitHub 加载最新数据', 'success');
+      loadDatalistOptions(); refreshRangeFilters(); updateHeaderStats();
+    }
+  } catch(e) {
+    setSyncStatus('error', '加载失败');
+    if (manual) showToast('❌ 加载失败：' + e.message, 'error');
+    console.error('loadFromGitee', e);
+  }
+}
+
+// =====================================================
+// GITHUB BACKUP — 每次提交检查后调用
+// =====================================================
+const MAX_GITEE_BACKUPS = 30;
+
+async function giteeBackup(words, errors, sessions, token, owner, repo, username) {
+  const dateStr = new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
+  const filename = `backup_${dateStr}.json`;
+  const backupDir = `backups/${username}`;
+  const backupPath = `${backupDir}/${filename}`;
+  const content = JSON.stringify({ version:1, exportTime: new Date().toISOString(), words, errors, sessions }, null, 2);
+
+  // 写入新备份
+  await ghPutFile(owner, repo, backupPath, content, `backup: ${username} ${dateStr}`, null, token);
+
+  // 列出备份目录，超30个删最旧的
+  try {
+    const files = await ghListDir(owner, repo, backupDir, token);
+    const backups = files.filter(f => f.type === 'file' && f.name.startsWith('backup_') && f.name.endsWith('.json'));
+    backups.sort((a,b) => a.name.localeCompare(b.name)); // 按文件名（含时间）升序排列，最旧在前
+    if (backups.length > MAX_GITEE_BACKUPS) {
+      const toDelete = backups.slice(0, backups.length - MAX_GITEE_BACKUPS);
+      for (const f of toDelete) {
+        await giteeDeleteFile(owner, repo, f.path, f.sha, `cleanup: remove old backup ${f.name}`, token);
+      }
+    }
+  } catch(e) { console.warn('backup cleanup failed', e); }
+}
+
+// =====================================================
+// BACKUP LIST MODAL — 从 Gitee 备份导入
+// =====================================================
+let backupFileList = []; // [{name, sha, path}]
+let selectedBackupIdx = -1;
+
+async function showBackupList() {
+  if (!currentUser) return;
+  const { ghToken: token, ghOwner: owner, ghRepo: repo, username } = currentUser;
+  selectedBackupIdx = -1;
+  document.getElementById('backupImportConfirmBtn').disabled = true;
+  document.getElementById('backupListContent').innerHTML = '<div class="no-data">加载中…</div>';
+  document.getElementById('backupListModal').classList.add('show');
+
+  try {
+    const backupDir = `backups/${username}`;
+    const files = await ghListDir(owner, repo, backupDir, token);
+    backupFileList = files.filter(f => f.type === 'file' && f.name.startsWith('backup_') && f.name.endsWith('.json'));
+    backupFileList.sort((a,b) => b.name.localeCompare(a.name)); // 最新在前
+
+    if (!backupFileList.length) {
+      document.getElementById('backupListContent').innerHTML = '<div class="no-data">暂无云端备份</div>';
+      return;
+    }
+    document.getElementById('backupListContent').innerHTML = backupFileList.map((f,i) => {
+      // 从文件名提取时间：backup_2026-04-19-15-30-00.json
+      const dateStr = f.name.replace('backup_','').replace('.json','').replace(/-(\d{2})-(\d{2})-(\d{2})$/,' $1:$2:$3').replace(/-/g,'/').replace(' ','T');
+      const displayDate = dateStr.replace('T',' ');
+      return `<div class="backup-item" id="backup_item_${i}" onclick="selectBackup(${i})">
+        <div>
+          <div class="backup-item-name">📦 ${f.name}</div>
+          <div class="backup-item-meta">🕐 ${displayDate}</div>
+        </div>
+        <div class="backup-item-actions">
+          <span class="badge badge-primary" style="opacity:.7">#${backupFileList.length - i}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('backupListContent').innerHTML = `<div class="no-data" style="color:var(--danger)">加载失败：${e.message}</div>`;
+  }
+}
+
+function selectBackup(i) {
+  selectedBackupIdx = i;
+  document.querySelectorAll('.backup-item').forEach((el,j) => el.classList.toggle('selected', j===i));
+  document.getElementById('backupImportConfirmBtn').disabled = false;
+}
+
+async function importSelectedBackup() {
+  if (selectedBackupIdx < 0 || !currentUser) return;
+  const f = backupFileList[selectedBackupIdx];
+  const { ghToken: token, ghOwner: owner, ghRepo: repo } = currentUser;
+  const btn = document.getElementById('backupImportConfirmBtn');
+  btn.disabled = true; btn.textContent = '导入中…';
+  try {
+    const file = await ghGetFile(owner, repo, f.path, token);
+    if (!file) { showToast('❌ 读取备份文件失败', 'error'); return; }
+    const backup = JSON.parse(file.content);
+    if (!backup.words) { showToast('❌ 备份文件格式不正确', 'error'); return; }
+    let wOk=0, wSkip=0;
+    (backup.words || []).forEach(r => {
+      const exist = queryAll('SELECT id FROM words WHERE grade=? AND unit=? AND lesson=? AND word=?', [r.grade,r.unit,r.lesson,r.word]);
+      if (exist.length) { wSkip++; return; }
+      if (runSQL('INSERT INTO words(grade,unit,lesson,type,word) VALUES(?,?,?,?,?)',[r.grade,r.unit,r.lesson,r.type,r.word])) wOk++;
+    });
+    saveDB();
+    loadDatalistOptions(); updateHeaderStats();
+    closeModal('backupListModal');
+    showToast(`✅ 备份导入完成：新增词语 ${wOk} 条，跳过 ${wSkip} 条`, 'success');
+  } catch(e) {
+    showToast('❌ 导入失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '导入选中备份';
+  }
+}
+
+// =====================================================
+// DB ENGINE
+// =====================================================
+async function initDB() {
+  if (!SQL) SQL = await initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}` });
+  const saved = localStorage.getItem(dbKey());
+  if (saved) {
+    const arr = JSON.parse(saved);
+    db = new SQL.Database(new Uint8Array(arr));
+  } else {
+    db = new SQL.Database();
+  }
+  db.run(`
+    CREATE TABLE IF NOT EXISTS words (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      grade TEXT NOT NULL, unit TEXT NOT NULL, lesson TEXT NOT NULL,
+      type TEXT NOT NULL, word TEXT NOT NULL,
+      UNIQUE(grade, unit, lesson, type, word)
+    );
+    CREATE TABLE IF NOT EXISTS errors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      grade TEXT NOT NULL, unit TEXT NOT NULL, lesson TEXT NOT NULL,
+      type TEXT NOT NULL, word TEXT NOT NULL,
+      wrong_count INTEGER DEFAULT 1, correct_count INTEGER DEFAULT 0,
+      first_wrong TEXT, last_wrong TEXT,
+      UNIQUE(grade, unit, lesson, type, word)
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      start_time TEXT NOT NULL, end_time TEXT,
+      duration_sec INTEGER DEFAULT 0, total_words INTEGER DEFAULT 0,
+      correct_words INTEGER DEFAULT 0, wrong_words INTEGER DEFAULT 0,
+      accuracy REAL DEFAULT 0, scope TEXT DEFAULT ''
+    );
+  `);
+  saveDB();
+}
+
+function saveDB() {
+  if (!db) return;
+  const data = db.export();
+  localStorage.setItem(dbKey(), JSON.stringify(Array.from(data)));
+}
+
+function queryAll(sql, params=[]) {
+  try {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) rows.push(stmt.getAsObject());
+    stmt.free();
+    return rows;
+  } catch(e) { console.error(e); return []; }
+}
+
+function runSQL(sql, params=[]) {
+  try { db.run(sql, params); saveDB(); return true; }
+  catch(e) { console.error(e); return false; }
+}
+
+// =====================================================
+// NAVIGATION
+// =====================================================
+function switchPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelector(`[data-page="${id}"]`).classList.add('active');
+  if (id === 'managePage') { currentPage = 1; loadManageTable(); }
+  if (id === 'errorPage') loadErrorTable();
+  if (id === 'statsPage') loadStatsPage();
+  if (id === 'inputPage') loadDatalistOptions();
+  if (id === 'checkPage') loadCheckPage();
+  if (id === 'dictationPage') refreshRangeFilters();
+}
+
+// =====================================================
+// RANGE FILTERS
+// =====================================================
+function refreshRangeFilters() {
+  const grades  = queryAll("SELECT DISTINCT grade FROM words ORDER BY grade");
+  const units   = queryAll("SELECT DISTINCT unit FROM words ORDER BY unit");
+  const lessons = queryAll("SELECT DISTINCT lesson FROM words ORDER BY lesson");
+  const types   = queryAll("SELECT DISTINCT type FROM words ORDER BY type");
+  renderCheckboxGroup('gradeChecks',  grades.map(r=>r.grade));
+  renderCheckboxGroup('unitChecks',   units.map(r=>r.unit));
+  renderCheckboxGroup('lessonChecks', lessons.map(r=>r.lesson));
+  renderCheckboxGroup('typeChecks',   types.map(r=>r.type));
+  updateMatchCount();
+}
+
+function renderCheckboxGroup(containerId, values) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = values.map((v,i) => `
+    <div class="check-item">
+      <input type="checkbox" id="${containerId}_${i}" value="${escHtml(v)}" onchange="updateMatchCount()">
+      <label for="${containerId}_${i}">${escHtml(v)}</label>
+    </div>`).join('');
+}
+
+function selectAll(groupId) {
+  document.querySelectorAll(`#${groupId} input[type=checkbox]`).forEach(c => c.checked = true);
+  updateMatchCount();
+}
+
+function getChecked(groupId) {
+  return [...document.querySelectorAll(`#${groupId} input[type=checkbox]:checked`)].map(c => c.value);
+}
+
+function buildWhereClause(grades, units, lessons, types) {
+  const parts = [];
+  if (grades.length)  parts.push(`grade IN (${grades.map(()=>'?').join(',')})`);
+  if (units.length)   parts.push(`unit IN (${units.map(()=>'?').join(',')})`);
+  if (lessons.length) parts.push(`lesson IN (${lessons.map(()=>'?').join(',')})`);
+  if (types.length)   parts.push(`type IN (${types.map(()=>'?').join(',')})`);
+  return { where: parts.length ? 'WHERE '+parts.join(' AND ') : '', params: [...grades,...units,...lessons,...types] };
+}
+
+function updateMatchCount() {
+  const g = getChecked('gradeChecks'), u = getChecked('unitChecks'),
+        l = getChecked('lessonChecks'), t = getChecked('typeChecks');
+  if (!g.length && !u.length && !l.length && !t.length) {
+    document.getElementById('matchCount').textContent = '—';
+    document.getElementById('errorWordHint').style.display = 'none';
+    return;
+  }
+  const {where, params} = buildWhereClause(g,u,l,t);
+  const cnt = queryAll(`SELECT COUNT(*) as c FROM words ${where}`, params)[0]?.c || 0;
+  document.getElementById('matchCount').textContent = cnt + ' 个';
+  const errWords = queryAll(`SELECT * FROM errors WHERE correct_count < 3`, []);
+  if (errWords.length > 0) {
+    document.getElementById('errorWordHint').style.display = 'block';
+    document.getElementById('errorWordCount').textContent = errWords.length;
+  } else {
+    document.getElementById('errorWordHint').style.display = 'none';
+  }
+}
+
+// =====================================================
+// DICTATION
+// =====================================================
+let dictationWords = [];
+let currentWordIdx = -1;
+let lastWords = [];
+let recognition = null;
+let synth = window.speechSynthesis;
+let timerInterval = null;
+let timerSeconds = 0;
+let dictStartTime = null;
+let currentSessionId = null;
+let dictScope = '';
+let currentPage = 1;
+const PAGE_SIZE = 30;
+
+function startDictation() {
+  const g = getChecked('gradeChecks'), u = getChecked('unitChecks'),
+        l = getChecked('lessonChecks'), t = getChecked('typeChecks');
+  if (!g.length && !u.length && !l.length && !t.length) {
+    showToast('请至少选择一个筛选条件', 'error'); return;
+  }
+  const {where, params} = buildWhereClause(g,u,l,t);
+  let words = queryAll(`SELECT * FROM words ${where} ORDER BY grade,unit,lesson,type,word`, params);
+  if (!words.length) { showToast('所选条件下没有词语', 'error'); return; }
+
+  let errRows = queryAll(`SELECT * FROM errors WHERE correct_count < 3`);
+  const rangeSet = new Set(words.map(w => w.grade+'|'+w.unit+'|'+w.lesson+'|'+w.type+'|'+w.word));
+  let extraErr = errRows.filter(r => !rangeSet.has(r.grade+'|'+r.unit+'|'+r.lesson+'|'+r.type+'|'+r.word));
+  if (extraErr.length > 10) extraErr = shuffle(extraErr).slice(0, 10);
+  let allWords = [...words, ...extraErr];
+
+  const pickN = parseInt(document.getElementById('pickCount').value) || 0;
+  if (pickN > 0 && pickN < allWords.length) {
+    allWords = shuffle(allWords).slice(0, pickN);
+  } else {
+    allWords = shuffle(allWords);
+  }
+
+  dictationWords = allWords;
+  currentWordIdx = -1;
+  lastWords = [...allWords];
+
+  const scopeParts = [];
+  if (g.length) scopeParts.push(g.join('/'));
+  if (u.length) scopeParts.push(u.join('/'));
+  if (l.length) scopeParts.push(l.join('/'));
+  if (t.length) scopeParts.push(t.join('/'));
+  dictScope = scopeParts.join(' · ') || '全部';
+
+  startTimer();
+  const now = new Date().toISOString().slice(0,19).replace('T',' ');
+  runSQL(`INSERT INTO sessions(start_time, total_words, scope) VALUES(?,?,?)`, [now, allWords.length, dictScope]);
+  const rows = queryAll(`SELECT MAX(id) as id FROM sessions WHERE start_time=?`, [now]);
+  currentSessionId = rows[0]?.id || null;
+
+  document.getElementById('rangeCard').style.display = 'none';
+  document.getElementById('finishCard').style.display = 'none';
+  document.getElementById('broadcastCard').style.display = 'block';
+  updateProgress();
+  setBroadcastStatus('🎧', '准备播报…', false);
+  startVoiceRecognition();
+  nextWord();
+}
+
+function updateProgress() {
+  const total = dictationWords.length;
+  const cur = Math.max(0, currentWordIdx);
+  const pct = total ? ((cur + 1) / total) * 100 : 0;
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${cur + 1} / ${total}`;
+}
+
+function prevWord() {
+  if (currentWordIdx <= 0) { showToast('已是第一个词语', ''); return; }
+  currentWordIdx--;
+  updateProgress();
+  const w = dictationWords[currentWordIdx];
+  setBroadcastStatus('🔊', `第 ${currentWordIdx + 1} 个，重播中…`, true);
+  speakWord(w.word, 0.85);
+  const waitMs = Math.max(1500, w.word.length * 700 + 800);
+  setTimeout(() => setBroadcastStatus('✍️', '请默写，准备好后点击"下一个"', false), waitMs);
+}
+
+function nextWord() {
+  currentWordIdx++;
+  if (currentWordIdx >= dictationWords.length) { finishBroadcast(); return; }
+  updateProgress();
+  const w = dictationWords[currentWordIdx];
+  setBroadcastStatus('🔊', `第 ${currentWordIdx + 1} 个，播报中…`, true);
+  speakWord(w.word, 0.85);
+  const waitMs = Math.max(1500, w.word.length * 700 + 800);
+  setTimeout(() => setBroadcastStatus('✍️', '请默写，准备好后点击"下一个"', false), waitMs);
+}
+
+function repeatWord() {
+  if (currentWordIdx < 0 || currentWordIdx >= dictationWords.length) return;
+  const w = dictationWords[currentWordIdx];
+  setBroadcastStatus('🔊', '重复播报中…', true);
+  speakWord(w.word, 0.85);
+  const waitMs = Math.max(1500, w.word.length * 700 + 800);
+  setTimeout(() => setBroadcastStatus('✍️', '请默写，准备好后点击"下一个"', false), waitMs);
+}
+
+function setBroadcastStatus(icon, text, animating) {
+  document.getElementById('speakingIcon').textContent = icon;
+  document.getElementById('broadcastStatus').textContent = text;
+  const ind = document.getElementById('broadcastIndicator');
+  ind.style.animation = animating ? 'pulse 1s ease-in-out infinite' : 'none';
+}
+
+function speakSlow() {
+  if (currentWordIdx < 0 || currentWordIdx >= dictationWords.length) return;
+  const w = dictationWords[currentWordIdx];
+  setBroadcastStatus('🐢', '慢速播报中…', true);
+  speakWord(w.word, 0.45);
+  const waitMs = Math.max(2000, w.word.length * 1200 + 800);
+  setTimeout(() => setBroadcastStatus('✍️', '请默写，准备好后点击"下一个"', false), waitMs);
+}
+
+function speakWord(text, rate=0.85) {
+  synth.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'zh-CN'; utt.rate = rate; utt.pitch = 1.0; utt.volume = 1.0;
+  const voices = synth.getVoices();
+  const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+  if (zhVoice) utt.voice = zhVoice;
+  synth.speak(utt);
+}
+
+function stopDictation() {
+  synth.cancel();
+  stopVoiceRecognition();
+  stopTimer();
+  if (currentSessionId) {
+    const endNow = new Date().toISOString().slice(0,19).replace('T',' ');
+    runSQL(`UPDATE sessions SET end_time=?, duration_sec=?, total_words=? WHERE id=?`,
+      [endNow, timerSeconds, lastWords.length, currentSessionId]);
+    currentSessionId = null;
+  }
+  dictationWords = [];
+  currentWordIdx = -1;
+  document.getElementById('broadcastCard').style.display = 'none';
+  document.getElementById('rangeCard').style.display = 'block';
+}
+
+function finishBroadcast() {
+  synth.cancel();
+  stopVoiceRecognition();
+  stopTimer();
+  if (currentSessionId) {
+    const endNow = new Date().toISOString().slice(0,19).replace('T',' ');
+    runSQL(`UPDATE sessions SET end_time=?, duration_sec=?, total_words=? WHERE id=?`,
+      [endNow, timerSeconds, lastWords.length, currentSessionId]);
+  }
+  document.getElementById('broadcastCard').style.display = 'none';
+  document.getElementById('finishCard').style.display = 'block';
+  document.getElementById('totalBroadcast').textContent = lastWords.length;
+  document.getElementById('finishTimerDisplay').textContent = formatTime(timerSeconds);
+  updateProgress();
+}
+
+function resetDictation() {
+  currentSessionId = null;
+  lastWords = [];
+  document.getElementById('finishCard').style.display = 'none';
+  document.getElementById('rangeCard').style.display = 'block';
+}
+
+function goToCheck() { switchPage('checkPage'); }
+
+// =====================================================
+// VOICE RECOGNITION
+// =====================================================
+function startVoiceRecognition() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    document.getElementById('voiceStatus').textContent = '浏览器不支持语音识别'; return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'zh-CN';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.onstart = () => {
+    document.getElementById('micIndicator').classList.add('listening');
+    document.getElementById('voiceStatus').textContent = '语音监听中…';
+  };
+  recognition.onresult = (e) => {
+    const t = e.results[e.results.length-1][0].transcript.trim();
+    if (/下一个|下一|继续|next/i.test(t)) nextWord();
+    else if (/重复|再说|repeat/i.test(t)) repeatWord();
+    else if (/上一个|上一|返回|back/i.test(t)) prevWord();
+  };
+  recognition.onerror = () => {
+    document.getElementById('micIndicator').classList.remove('listening');
+    document.getElementById('voiceStatus').textContent = '语音识别错误，请手动点击';
+  };
+  recognition.onend = () => {
+    document.getElementById('micIndicator').classList.remove('listening');
+    if (document.getElementById('broadcastCard').style.display !== 'none') {
+      try { recognition.start(); } catch(e) {}
+    }
+  };
+  try { recognition.start(); } catch(e) {}
+}
+
+function stopVoiceRecognition() {
+  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
+  document.getElementById('micIndicator').classList.remove('listening');
+  document.getElementById('voiceStatus').textContent = '语音识别已停止';
+}
+
+// =====================================================
+// CHECK PAGE
+// =====================================================
+let checkWords = [];
+
+function loadCheckPage() {
+  if (!lastWords.length) {
+    document.getElementById('checkNoData').style.display = 'block';
+    document.getElementById('checkContent').style.display = 'none';
+    return;
+  }
+  document.getElementById('checkNoData').style.display = 'none';
+  document.getElementById('checkContent').style.display = 'block';
+  checkWords = lastWords.map(w => ({...w, wrong: false}));
+  renderCheckGrid();
+  updateCheckStats();
+}
+
+function renderCheckGrid() {
+  const grid = document.getElementById('checkWordGrid');
+  grid.innerHTML = checkWords.map((w,i) => `
+    <div class="word-chip ${w.wrong?'wrong':'correct'}" onclick="toggleWrong(${i})" id="chip_${i}">
+      <span class="chip-idx">${i+1}</span>
+      ${escHtml(w.word)}
+    </div>`).join('');
+  updateWrongSummary();
+}
+
+function toggleWrong(i) {
+  checkWords[i].wrong = !checkWords[i].wrong;
+  const chip = document.getElementById(`chip_${i}`);
+  chip.classList.toggle('wrong', checkWords[i].wrong);
+  chip.classList.toggle('correct', !checkWords[i].wrong);
+  updateCheckStats();
+  updateWrongSummary();
+}
+
+function updateCheckStats() {
+  const total = checkWords.length;
+  const wrong = checkWords.filter(w=>w.wrong).length;
+  const correct = total - wrong;
+  document.getElementById('checkStats').innerHTML = `
+    <div class="stat-item"><div class="stat-num">${total}</div><div class="stat-label">总计</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:var(--success)">${correct}</div><div class="stat-label">正确</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:var(--danger)">${wrong}</div><div class="stat-label">错误</div></div>`;
+}
+
+function updateWrongSummary() {
+  const wrongs = checkWords.filter(w=>w.wrong);
+  const el = document.getElementById('wrongSummary');
+  if (wrongs.length) {
+    el.style.display = 'block';
+    document.getElementById('wrongWordsList').innerHTML = wrongs.map(w =>
+      `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 10px;background:rgba(239,68,68,.1);border-radius:999px;color:var(--danger);font-weight:600">${escHtml(w.word)}</span>`
+    ).join('');
+  } else { el.style.display = 'none'; }
+}
+
+function resetCheck() {
+  checkWords.forEach(w => w.wrong = false);
+  renderCheckGrid();
+  updateCheckStats();
+}
+
+async function submitCheck() {
+  const wrongs = checkWords.filter(w => w.wrong);
+  const corrects = checkWords.filter(w => !w.wrong);
+  const now = new Date().toISOString().slice(0,19).replace('T',' ');
+
+  wrongs.forEach(w => {
+    const exist = queryAll(`SELECT * FROM errors WHERE grade=? AND unit=? AND lesson=? AND type=? AND word=?`,
+      [w.grade,w.unit,w.lesson,w.type,w.word]);
+    if (exist.length) {
+      runSQL(`UPDATE errors SET wrong_count=wrong_count+1, last_wrong=? WHERE grade=? AND unit=? AND lesson=? AND type=? AND word=?`,
+        [now, w.grade,w.unit,w.lesson,w.type,w.word]);
+    } else {
+      runSQL(`INSERT INTO errors(grade,unit,lesson,type,word,wrong_count,correct_count,first_wrong,last_wrong) VALUES(?,?,?,?,?,1,0,?,?)`,
+        [w.grade,w.unit,w.lesson,w.type,w.word,now,now]);
+    }
+  });
+
+  corrects.forEach(w => {
+    const exist = queryAll(`SELECT * FROM errors WHERE grade=? AND unit=? AND lesson=? AND type=? AND word=?`,
+      [w.grade,w.unit,w.lesson,w.type,w.word]);
+    if (exist.length) {
+      runSQL(`UPDATE errors SET correct_count=correct_count+1 WHERE grade=? AND unit=? AND lesson=? AND type=? AND word=?`,
+        [w.grade,w.unit,w.lesson,w.type,w.word]);
+      const updated = queryAll(`SELECT correct_count FROM errors WHERE grade=? AND unit=? AND lesson=? AND type=? AND word=?`,
+        [w.grade,w.unit,w.lesson,w.type,w.word]);
+      if (updated.length && updated[0].correct_count >= 3) {
+        runSQL(`DELETE FROM errors WHERE grade=? AND unit=? AND lesson=? AND type=? AND word=?`,
+          [w.grade,w.unit,w.lesson,w.type,w.word]);
+      }
+    }
+  });
+
+  const wrongCount = wrongs.length;
+  const totalCount = checkWords.length;
+  const correctCount = totalCount - wrongCount;
+  const accuracy = totalCount > 0 ? Math.round(correctCount / totalCount * 100) : 0;
+
+  if (currentSessionId) {
+    const endNow = new Date().toISOString().slice(0,19).replace('T',' ');
+    runSQL(`UPDATE sessions SET end_time=COALESCE(end_time,?), duration_sec=?, total_words=?, correct_words=?, wrong_words=?, accuracy=? WHERE id=?`,
+      [endNow, timerSeconds, totalCount, correctCount, wrongCount, accuracy, currentSessionId]);
+    currentSessionId = null;
+  }
+
+  showToast(wrongCount > 0
+    ? `✅ 已记录 ${wrongCount} 个错误词语到错误表`
+    : '🎉 全部正确！太棒了！', wrongCount > 0 ? '' : 'success');
+
+  lastWords = [];
+  updateHeaderStats();
+
+  // Gitee 云端同步
+  syncToGitee(false).catch(()=>{});
+
+  setTimeout(() => {
+    if (wrongCount > 0) switchPage('errorPage');
+    else switchPage('statsPage');
+  }, 1200);
+}
+
+// =====================================================
+// ERROR TABLE
+// =====================================================
+function loadErrorTable() {
+  const rows = queryAll(`SELECT * FROM errors ORDER BY wrong_count DESC, last_wrong DESC`);
+  const tbody = document.getElementById('errorTableBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="no-data">🎉 暂无错误记录，继续保持！</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td><strong>${escHtml(r.word)}</strong></td>
+        <td>${escHtml(r.grade)}</td><td>${escHtml(r.unit)}</td>
+        <td>${escHtml(r.lesson)}</td><td>${escHtml(r.type)}</td>
+        <td><span class="error-badge">${r.wrong_count}</span></td>
+        <td><span class="badge badge-success">${r.correct_count}</span></td>
+        <td style="font-size:.75rem;color:var(--text-muted)">${(r.first_wrong||'').slice(0,10)}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="deleteErrorWord(${r.id})">✕</button></td>
+      </tr>`).join('');
+  }
+  const total = rows.length;
+  const totalWrong = rows.reduce((a,r) => a+r.wrong_count, 0);
+  const totalCorrect = rows.reduce((a,r) => a+r.correct_count, 0);
+  document.getElementById('eStat1').textContent = total;
+  document.getElementById('eStat2').textContent = totalWrong;
+  document.getElementById('eStat3').textContent = totalCorrect;
+}
+
+function deleteErrorWord(id) {
+  showConfirm('确认移除', '确定从错误表中移除该词语？', () => {
+    runSQL(`DELETE FROM errors WHERE id=?`, [id]);
+    loadErrorTable();
+    showToast('已移除');
+  });
+}
+
+// =====================================================
+// INPUT PAGE
+// =====================================================
+function addWords() {
+  const grade  = document.getElementById('inGrade').value.trim();
+  const unit   = document.getElementById('inUnit').value.trim();
+  const lesson = document.getElementById('inLesson').value.trim();
+  const type   = document.getElementById('inType').value.trim();
+  const raw    = document.getElementById('inWords').value;
+  if (!grade || !unit || !lesson || !type) { showToast('请填写年级、单元、课文、类型', 'error'); return; }
+  const words = raw.split(/[\n,，\s]+/).map(w => w.trim()).filter(w => w);
+  if (!words.length) { showToast('请输入词语', 'error'); return; }
+  let added = 0, skip = 0;
+  words.forEach(word => {
+    const exist = queryAll(`SELECT id FROM words WHERE grade=? AND unit=? AND lesson=? AND word=?`,[grade,unit,lesson,word]);
+    if (exist.length) { skip++; return; }
+    if (runSQL(`INSERT INTO words(grade,unit,lesson,type,word) VALUES(?,?,?,?,?)`,[grade,unit,lesson,type,word])) added++;
+  });
+  showToast(`✅ 成功添加 ${added} 个词语${skip ? '，' + skip + ' 个重复已跳过' : ''}`, 'success');
+  document.getElementById('inWords').value = '';
+  loadDatalistOptions();
+  updateHeaderStats();
+}
+
+function clearInputForm() {
+  ['inGrade','inUnit','inLesson','inType','inWords'].forEach(id => document.getElementById(id).value = '');
+}
+
+function loadDatalistOptions() {
+  const fill = (id, sql) => {
+    const rows = queryAll(sql);
+    document.getElementById(id).innerHTML = rows.map(r => `<option value="${escHtml(Object.values(r)[0])}">`).join('');
+  };
+  fill('gradeList',  'SELECT DISTINCT grade FROM words ORDER BY grade');
+  fill('unitList',   'SELECT DISTINCT unit FROM words ORDER BY unit');
+  fill('lessonList', 'SELECT DISTINCT lesson FROM words ORDER BY lesson');
+  fill('typeList',   'SELECT DISTINCT type FROM words ORDER BY type');
+}
+
+function importFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const lines = ev.target.result.split('\n').map(l=>l.trim()).filter(l=>l);
+    let ok=0, skip=0, err=0;
+    lines.forEach((line, lineIdx) => {
+      if (lineIdx === 0 && /年级|grade/i.test(line)) return;
+      const parts = line.split(/[,，\t]/);
+      if (parts.length < 5) { err++; return; }
+      const [grade, unit, lesson, type, word] = parts.map(p => p.trim().replace(/^["'"']|["'"']$/g, '').trim());
+      if (!grade||!unit||!lesson||!type||!word) { err++; return; }
+      const exist = queryAll(`SELECT id FROM words WHERE grade=? AND unit=? AND lesson=? AND word=?`,[grade,unit,lesson,word]);
+      if (exist.length) { skip++; return; }
+      const res = runSQL(`INSERT INTO words(grade,unit,lesson,type,word) VALUES(?,?,?,?,?)`,[grade,unit,lesson,type,word]);
+      if (res) ok++; else err++;
+    });
+    showToast(`导入完成：新增${ok}个，重复跳过${skip}个，格式错误${err}行`, ok>0?'success':'');
+    loadDatalistOptions();
+    updateHeaderStats();
+    e.target.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+const importArea = document.getElementById('importArea');
+if (importArea) {
+  importArea.addEventListener('dragover', e => { e.preventDefault(); importArea.classList.add('drag-over'); });
+  importArea.addEventListener('dragleave', () => importArea.classList.remove('drag-over'));
+  importArea.addEventListener('drop', e => {
+    e.preventDefault(); importArea.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) {
+      importFile({ target: { files: e.dataTransfer.files, value: '' } });
+    }
+  });
+}
+
+// =====================================================
+// MANAGE PAGE
+// =====================================================
+let allWords = [];
+let filteredWords = [];
+
+function loadManageTable() {
+  allWords = queryAll(`SELECT * FROM words ORDER BY grade,unit,lesson,type,word`);
+  filteredWords = [...allWords];
+  renderManagePage();
+  document.getElementById('totalWordsBadge').textContent = allWords.length + ' 词';
+}
+
+function searchWords() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  filteredWords = q ? allWords.filter(w =>
+    w.word.includes(q)||w.grade.toLowerCase().includes(q)||w.unit.toLowerCase().includes(q)||
+    w.lesson.toLowerCase().includes(q)||w.type.toLowerCase().includes(q)
+  ) : [...allWords];
+  currentPage = 1;
+  renderManagePage();
+}
+
+function renderManagePage() {
+  const total = filteredWords.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  const start = (currentPage-1)*PAGE_SIZE;
+  const pageWords = filteredWords.slice(start, start+PAGE_SIZE);
+  const tbody = document.getElementById('manageTableBody');
+  if (!pageWords.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="no-data">📭 暂无词语数据</td></tr>`;
+  } else {
+    tbody.innerHTML = pageWords.map(w => `
+      <tr>
+        <td>${escHtml(w.grade)}</td><td>${escHtml(w.unit)}</td>
+        <td>${escHtml(w.lesson)}</td><td>${escHtml(w.type)}</td>
+        <td><strong>${escHtml(w.word)}</strong></td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteWord(${w.id})">删除</button></td>
+      </tr>`).join('');
+  }
+  let pgHtml = '';
+  if (totalPages > 1) {
+    pgHtml = `<button class="btn btn-outline btn-sm" onclick="gotoPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>‹</button>`;
+    for (let p=1;p<=totalPages;p++) {
+      if (p===1||p===totalPages||Math.abs(p-currentPage)<=2)
+        pgHtml += `<button class="btn btn-sm ${p===currentPage?'btn-primary':'btn-outline'}" onclick="gotoPage(${p})">${p}</button>`;
+      else if (Math.abs(p-currentPage)===3)
+        pgHtml += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
+    }
+    pgHtml += `<button class="btn btn-outline btn-sm" onclick="gotoPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>›</button>`;
+  }
+  document.getElementById('pagination').innerHTML = pgHtml;
+}
+
+function gotoPage(p) {
+  const maxPage = Math.ceil(filteredWords.length / PAGE_SIZE) || 1;
+  currentPage = Math.max(1, Math.min(maxPage, p));
+  renderManagePage();
+}
+
+function deleteWord(id) {
+  showConfirm('确认删除', '确定删除该词语？此操作不可撤销。', () => {
+    runSQL(`DELETE FROM words WHERE id=?`, [id]);
+    showToast('已删除');
+    loadManageTable();
+    updateHeaderStats();
+  });
+}
+
+function clearAllData() {
+  showConfirm('⚠️ 清空所有数据', '此操作将删除所有词语和错误记录，且不可撤销！', () => {
+    runSQL(`DELETE FROM words`);
+    runSQL(`DELETE FROM errors`);
+    showToast('已清空所有数据');
+    loadManageTable();
+    updateHeaderStats();
+    refreshRangeFilters();
+  });
+}
+
+function exportData() {
+  const rows = queryAll(`SELECT grade,unit,lesson,type,word FROM words ORDER BY grade,unit,lesson,type,word`);
+  if (!rows.length) { showToast('暂无数据可导出', 'error'); return; }
+  const csv = '年级,单元,课文,类型,词语\n' + rows.map(r => [r.grade,r.unit,r.lesson,r.type,r.word].join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '听写词语库_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✅ 词库导出成功');
+}
+
+// 本地全量备份导出（JSON）
+function exportBackup() {
+  const words    = queryAll(`SELECT * FROM words ORDER BY id`);
+  const errors   = queryAll(`SELECT * FROM errors ORDER BY id`);
+  const sessions = queryAll(`SELECT * FROM sessions ORDER BY id`);
+  const backup = { version: 1, exportTime: new Date().toISOString(), words, errors, sessions };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '听写助手备份_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ 备份成功：词语${words.length}条、错误${errors.length}条、统计${sessions.length}条`);
+}
+
+// =====================================================
+// TIMER
+// =====================================================
+function startTimer() {
+  timerSeconds = 0;
+  dictStartTime = Date.now();
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timerSeconds = Math.floor((Date.now() - dictStartTime) / 1000);
+    document.getElementById('timerDisplay').textContent = formatTime(timerSeconds);
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function formatTime(secs) {
+  const m = Math.floor(secs/60).toString().padStart(2,'0');
+  const s = (secs%60).toString().padStart(2,'0');
+  return `${m}:${s}`;
+}
+
+// =====================================================
+// STATS PAGE
+// =====================================================
+function loadStatsPage() {
+  const sessions = queryAll(`SELECT * FROM sessions WHERE end_time IS NOT NULL ORDER BY id DESC LIMIT 10`);
+  const allSessions = queryAll(`SELECT * FROM sessions WHERE end_time IS NOT NULL`);
+  const total = allSessions.length;
+  const totalWords = allSessions.reduce((a,r)=>a+r.total_words,0);
+  const avgAcc  = total ? Math.round(allSessions.reduce((a,r)=>a+r.accuracy,0)/total) : null;
+  const avgTime = total ? Math.round(allSessions.reduce((a,r)=>a+r.duration_sec,0)/total) : null;
+  document.getElementById('stTotal').textContent = total;
+  document.getElementById('stWords').textContent = totalWords;
+  document.getElementById('stAvgAcc').textContent = avgAcc !== null ? avgAcc+'%' : '—';
+  document.getElementById('stAvgTime').textContent = avgTime !== null ? formatTime(avgTime) : '—';
+
+  const tbody = document.getElementById('sessionsTableBody');
+  if (!sessions.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="no-data">📝 暂无听写记录，完成一次听写后显示</td></tr>`;
+  } else {
+    tbody.innerHTML = sessions.map((r,i) => {
+      const acc = r.accuracy || 0;
+      const accColor = acc>=90?'var(--success)':acc>=70?'var(--warning)':'var(--danger)';
+      const shortScope = (r.scope||'').length>20?(r.scope||'').slice(0,20)+'…':(r.scope||'—');
+      return `<tr>
+        <td><span class="badge badge-primary">${sessions.length-i}</span></td>
+        <td style="font-size:.78rem;white-space:nowrap">${(r.start_time||'').slice(0,16)}</td>
+        <td style="font-variant-numeric:tabular-nums;font-weight:700">${formatTime(r.duration_sec||0)}</td>
+        <td style="text-align:center">${r.total_words||0}</td>
+        <td style="text-align:center;color:var(--success);font-weight:700">${r.correct_words||0}</td>
+        <td style="text-align:center;color:var(--danger);font-weight:700">${r.wrong_words||0}</td>
+        <td>
+          <span style="font-weight:800;color:${accColor}">${acc}%</span>
+          <div style="margin-top:3px;height:4px;background:var(--border);border-radius:999px;width:60px">
+            <div style="height:100%;width:${acc}%;background:${accColor};border-radius:999px;transition:width .5s"></div>
+          </div>
+        </td>
+        <td style="font-size:.75rem;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.scope||'')}">${escHtml(shortScope)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const trendData = [...sessions].reverse();
+  if (trendData.length >= 2) {
+    document.getElementById('trendCard').style.display = 'block';
+    drawTrend(trendData);
+  } else {
+    document.getElementById('trendCard').style.display = 'none';
+  }
+}
+
+function drawTrend(data) {
+  const canvas = document.getElementById('trendCanvas');
+  canvas.width = canvas.offsetWidth || 600;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const padL=36,padR=12,padT=10,padB=24;
+  const chartW=W-padL-padR, chartH=H-padT-padB;
+  ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+  [0,25,50,75,100].forEach(v => {
+    const y = padT+chartH-(v/100)*chartH;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillStyle='#94a3b8'; ctx.font='10px sans-serif';
+    ctx.fillText(v+'%',2,y+4);
+  });
+  const pts = data.map((r,i) => ({
+    x: padL+(data.length===1?chartW/2:i/(data.length-1)*chartW),
+    y: padT+chartH-(r.accuracy/100)*chartH,
+    acc: r.accuracy
+  }));
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x,padT+chartH);
+  pts.forEach(p => ctx.lineTo(p.x,p.y));
+  ctx.lineTo(pts[pts.length-1].x,padT+chartH);
+  ctx.closePath();
+  ctx.fillStyle='rgba(79,70,229,.08)'; ctx.fill();
+  ctx.beginPath();
+  ctx.strokeStyle='#4f46e5'; ctx.lineWidth=2.5; ctx.lineJoin='round';
+  pts.forEach((p,i) => i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.stroke();
+  pts.forEach((p,i) => {
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,4,0,Math.PI*2);
+    ctx.fillStyle=p.acc>=90?'#10b981':p.acc>=70?'#f59e0b':'#ef4444';
+    ctx.fill();
+    ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
+    if (data.length<=6||i===0||i===data.length-1) {
+      ctx.fillStyle='#64748b'; ctx.font='bold 10px sans-serif';
+      ctx.fillText(p.acc+'%',p.x-10,p.y-8);
+    }
+  });
+  ctx.fillStyle='#94a3b8'; ctx.font='9px sans-serif';
+  pts.forEach((p,i) => {
+    if (data.length<=6||i===0||i===data.length-1) ctx.fillText(`#${i+1}`,p.x-5,H-4);
+  });
+}
+
+// =====================================================
+// UTILS
+// =====================================================
+function shuffle(arr) {
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function showToast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show'+(type?' '+type:'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.className='',3000);
+}
+
+function showConfirm(title, body, onOk) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmBody').textContent = body;
+  const btn = document.getElementById('confirmOkBtn');
+  btn.onclick = () => { closeModal('confirmModal'); onOk(); };
+  document.getElementById('confirmModal').classList.add('show');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function showStorageInfo() {
+  const raw = localStorage.getItem(dbKey()) || '';
+  const bytes = new Blob([raw]).size;
+  const kb = (bytes / 1024).toFixed(1);
+  const wordCnt = queryAll('SELECT COUNT(*) as c FROM words')[0]?.c || 0;
+  const errCnt  = queryAll('SELECT COUNT(*) as c FROM errors')[0]?.c || 0;
+  const sesCnt  = queryAll('SELECT COUNT(*) as c FROM sessions')[0]?.c || 0;
+  showToast(`💾 本地缓存：${kb} KB | 词语 ${wordCnt} 条 | 错误 ${errCnt} 条 | 统计 ${sesCnt} 条`);
+}
+
+function updateHeaderStats() {
+  const wordCount = queryAll('SELECT COUNT(*) as c FROM words')[0]?.c || 0;
+  const errCount  = queryAll('SELECT COUNT(*) as c FROM errors')[0]?.c || 0;
+  // header 显示在用户名左侧的 sync indicator，不再占独立区域
+  // 可在 user badge 区域添加微型信息
+}
+
+// keyboard
+document.addEventListener('keydown', e => {
+  if (document.getElementById('broadcastCard') &&
+      document.getElementById('broadcastCard').style.display !== 'none') {
+    if (e.code==='Space'||e.code==='Enter'){e.preventDefault();nextWord();}
+    if (e.code==='KeyR'){e.preventDefault();repeatWord();}
+    if (e.code==='KeyP'){e.preventDefault();prevWord();}
+  }
+});
+
+// =====================================================
+// INIT
+// =====================================================
+async function init() {
+  try {
+    document.getElementById('loadingText').textContent = '正在初始化…';
+    document.getElementById('loadingScreen').classList.remove('hidden');
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('loginPage').style.display = 'none';
+
+    // 检查是否有已登录用户
+    const savedUser = localStorage.getItem(CUR_USER_KEY);
+    const users = loadUsers();
+    if (savedUser && users[savedUser]) {
+      const u = users[savedUser];
+      currentUser = { username: savedUser, ghToken: u.ghToken, ghOwner: u.ghOwner, ghRepo: u.ghRepo };
+      document.getElementById('loadingText').textContent = `欢迎回来，${savedUser}！`;
+      await initDB();
+      await loadFromGitee(false);
+      document.getElementById('loadingScreen').classList.add('hidden');
+      showMainApp();
+
+      // 空数据库加示例
+      const cnt = queryAll('SELECT COUNT(*) as c FROM words')[0]?.c || 0;
+      if (cnt === 0) {
+        const sample = [
+          ['一年级上','第一单元','第1课','词语表','春天'],
+          ['一年级上','第一单元','第1课','词语表','夏天'],
+          ['一年级上','第一单元','第1课','词语表','秋天'],
+          ['一年级上','第一单元','第1课','词语表','冬天'],
+          ['一年级上','第一单元','第2课','词语表','美丽'],
+          ['一年级上','第一单元','第2课','词语表','快乐'],
+          ['一年级上','第二单元','第3课','组词','学习知识'],
+          ['一年级上','第二单元','第3课','组词','认真读书'],
+          ['一年级下','第一单元','第1课','词语表','聪明'],
+          ['一年级下','第一单元','第1课','词语表','勇敢'],
+        ];
+        sample.forEach(([g,u,l,t,w]) => runSQL(`INSERT OR IGNORE INTO words(grade,unit,lesson,type,word) VALUES(?,?,?,?,?)`,[g,u,l,t,w]));
+        refreshRangeFilters();
+        showToast('已加载示例数据，可直接体验！', 'success');
+      }
+    } else {
+      document.getElementById('loadingScreen').classList.add('hidden');
+      document.getElementById('loginPage').style.display = '';
+    }
+  } catch(err) {
+    console.error(err);
+    document.getElementById('loadingText').textContent = '初始化失败：' + err.message;
+    setTimeout(() => {
+      document.getElementById('loadingScreen').classList.add('hidden');
+      document.getElementById('loginPage').style.display = '';
+    }, 2000);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
